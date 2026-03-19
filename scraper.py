@@ -22,6 +22,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from threading import Lock
+from urllib.parse import urlparse
 
 import trafilatura
 from trafilatura.settings import use_config
@@ -39,7 +40,6 @@ from config import (
 _traf_config = use_config()
 _traf_config.set("DEFAULT", "DOWNLOAD_TIMEOUT", "10")
 
-# Goose3 is NOT thread-safe -- create one instance per call via factory
 def _make_goose() -> Goose:
     return Goose({
         "browser_user_agent": (
@@ -49,8 +49,43 @@ def _make_goose() -> Goose:
         "http_timeout": 10,
     })
 
-# Lock for writing to the log file from multiple threads
 _log_lock = Lock()
+
+
+# ── Source normalisation ──────────────────────────────────────────────────────
+
+def _extract_domain(url: str) -> str:
+    """
+    Extracts a clean domain name from a URL as a reliable source fallback.
+    Strips www. prefix so 'www.bbc.co.uk' becomes 'bbc.co.uk'.
+
+    Used when the extractor returns None, an empty string, or a full URL
+    as the source field — ensuring every article has a usable source name.
+
+    Examples:
+        'https://www.bbc.co.uk/news/...'  → 'bbc.co.uk'
+        'https://timesofindia.com/...'    → 'timesofindia.com'
+        'https://www.thehindu.com/...'    → 'thehindu.com'
+    """
+    try:
+        hostname = urlparse(url).hostname or ""
+        return hostname.removeprefix("www.")
+    except Exception:
+        return "N/A"
+
+
+def _clean_source(source: str | None, url: str) -> str:
+    """
+    Returns a clean source name. Falls back to domain extraction when
+    the extractor returns None, 'N/A', or a full URL (Newspaper4k returns
+    'https://...' instead of just the domain).
+    """
+    if not source or source == "N/A":
+        return _extract_domain(url)
+    # Newspaper4k returns full URLs — parse them down to just the domain
+    if source.startswith("http"):
+        return _extract_domain(source)
+    return source
 
 
 # ── Failed URL Logger ─────────────────────────────────────────────────────────
@@ -134,7 +169,7 @@ def _scrape_with_trafilatura(url: str) -> dict | None:
             "text":         text,
             "tags":         data.get("tags") or "N/A",
             "url":          url,
-            "source":       data.get("sitename") or "N/A",
+            "source":       _clean_source(data.get("sitename"), url),
             "language":     data.get("language") or "N/A",
             "extracted_by": "trafilatura",
             "scraped_at":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -168,7 +203,7 @@ def _scrape_with_newspaper(url: str) -> dict | None:
             "text":         text,
             "tags":         ", ".join(article.keywords) if article.keywords else "N/A",
             "url":          article.url or url,
-            "source":       article.source_url or "N/A",
+            "source":       _clean_source(article.source_url, article.url or url),
             "language":     "N/A",
             "extracted_by": "newspaper4k",
             "scraped_at":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -217,7 +252,7 @@ def _scrape_with_goose(url: str) -> dict | None:
             "text":         text,
             "tags":         tags,
             "url":          article.final_url or url,
-            "source":       article.domain or "N/A",
+            "source":       _clean_source(article.domain, article.final_url or url),
             "language":     article.meta_lang or "N/A",
             "extracted_by": "goose3",
             "scraped_at":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

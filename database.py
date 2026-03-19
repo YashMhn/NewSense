@@ -179,7 +179,45 @@ def get_stats(db_path: str = DB_PATH) -> dict:
     }
 
 
-def print_db_stats(db_path: str = DB_PATH) -> None:
+def backfill_sources(db_path: str = DB_PATH) -> int:
+    """
+    One-off migration: fills in missing source values for existing articles
+    by parsing the domain from each article's URL.
+
+    Safe to call multiple times — only updates rows where source is NULL,
+    empty, or 'N/A'.
+
+    Returns:
+        Number of rows updated.
+    """
+    from urllib.parse import urlparse
+
+    conn = get_connection(db_path)
+    rows = conn.execute("""
+        SELECT id, url FROM articles
+        WHERE source IS NULL OR source = '' OR source = 'N/A'
+    """).fetchall()
+
+    if not rows:
+        conn.close()
+        return 0
+
+    updated = 0
+    with conn:
+        for row in rows:
+            try:
+                hostname = urlparse(row["url"]).hostname or "N/A"
+                domain   = hostname.removeprefix("www.")
+                conn.execute(
+                    "UPDATE articles SET source = ? WHERE id = ?",
+                    (domain, row["id"]),
+                )
+                updated += 1
+            except Exception:
+                continue
+
+    conn.close()
+    return updated
     """Prints a formatted database stats summary to the terminal."""
     stats = get_stats(db_path)
 
