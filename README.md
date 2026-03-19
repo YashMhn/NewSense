@@ -1,24 +1,24 @@
 # NewSense
 
-A Python news scraper pipeline with a dark glassmorphism sentiment dashboard. Discovers articles from RSS feeds and sitemaps, extracts content through a three-layer fallback chain, and lets you explore sentiment interactively — including a live neutral boundary slider that reclassifies every chart in real time.
+A Python news scraper pipeline with a dark glassmorphism sentiment dashboard. Discovers articles from RSS feeds and sitemaps, extracts content through a three-layer fallback chain, and lets you explore sentiment interactively - including a live neutral boundary slider that reclassifies every chart in real time.
 
 ---
 
 ## What makes this different
 
-**Three-layer extraction fallback** — Trafilatura → Newspaper4k → Goose3, each with retry logic. If one library fails silently (rate limited, no content, text too short), the next takes over. Every failure path prints an explicit reason. Goose3 is specifically chosen as the third layer for its strength on Indian/Asian news sites.
+**Three-layer extraction fallback** - Trafilatura → Newspaper4k → Goose3, each with retry logic. If one library fails silently (rate limited, no content, text too short), the next takes over. Every failure path prints an explicit reason. Goose3 is specifically chosen as the third layer for its strength on Indian/Asian news sites.
 
-**Concurrent scraping with staggered submission** — `ThreadPoolExecutor` with configurable workers. Submissions are staggered (`REQUEST_DELAY / MAX_WORKERS`) so parallelism doesn't collapse into a burst that triggers rate limiting.
+**Concurrent scraping with staggered submission** - `ThreadPoolExecutor` with configurable workers. Submissions are staggered (`REQUEST_DELAY / MAX_WORKERS`) so parallelism doesn't collapse into a burst that triggers rate limiting.
 
-**Source normalisation across all extractors** — Trafilatura returns `"BBC News"`, Newspaper4k returns `"https://www.bbc.co.uk"`, Goose3 returns `"bbc.co.uk"`. All three are normalised to a clean domain via `urlparse` so every article has a consistent, filterable source. Existing articles with `"N/A"` source are backfilled automatically on dashboard startup.
+**Source normalisation across all extractors** - Trafilatura returns `"BBC News"`, Newspaper4k returns `"https://www.bbc.co.uk"`, Goose3 returns `"bbc.co.uk"`. All three are normalised to a clean domain via `urlparse` so every article has a consistent, filterable source. Existing articles with `"N/A"` source are backfilled automatically on dashboard startup.
 
-**Live neutral boundary slider** — VADER's default ±0.05 neutral threshold is arbitrary. A sidebar slider lets you adjust it from 0.00 to 0.30 in real time. Every chart, KPI, headline list, and word cloud re-classifies instantly without hitting the database — it's a pure view transformation on a DataFrame copy.
+**Live neutral boundary slider** - VADER's default ±0.05 neutral threshold is arbitrary. A sidebar slider lets you adjust it from 0.00 to 0.30 in real time. Every chart, KPI, headline list, and word cloud re-classifies instantly without hitting the database - it's a pure view transformation on a DataFrame copy.
 
-**Idempotent sentiment scoring** — scores are written back to the SQLite database. Re-running the dashboard never re-scores already-scored articles. Only rows where `vader_compound IS NULL` get processed. New articles from a fresh scrape are scored automatically when the dashboard loads.
+**Idempotent sentiment scoring** - scores are written back to the SQLite database. Re-running the dashboard never re-scores already-scored articles. Only rows where `vader_compound IS NULL` get processed. New articles from a fresh scrape are scored automatically when the dashboard loads.
 
-**Rotating failed URL log** — `data/failed_urls.log` rotates at `LOG_MAX_LINES` so it never grows unbounded on a long-running server. Writes are thread-safe via a `Lock`.
+**Rotating failed URL log** - `data/failed_urls.log` rotates at `LOG_MAX_LINES` so it never grows unbounded on a long-running server. Writes are thread-safe via a `Lock`.
 
-**Three-stage pipeline progression** — `main.py` for manual runs, `scheduler.py` for daily automation (works on Windows), Airflow DAG for production (Linux/WSL2). Each stage is independently functional.
+**Three-stage pipeline progression** - `main.py` for manual runs, `scheduler.py` for daily automation (works on Windows), Airflow DAG for production (Linux/WSL2). Each stage is independently functional.
 
 ---
 
@@ -31,22 +31,22 @@ uv run streamlit run dashboard.py
 Opens at `http://localhost:8501`. Scrapes fresh articles automatically if the database is empty.
 
 **Sidebar controls:**
-- Scorer toggle — switch all charts between VADER and TextBlob simultaneously
-- Headlines per column — how many top positive/negative headlines to show
-- Min articles per source — hide sources below this count from the filter and charts
-- Neutral boundary ±threshold — live reclassification slider
-- Source multiselect — filter to specific sources
-- Refresh data — clears the 5-minute cache and reloads from the DB
-- Re-run scraper — triggers a full discovery + scrape + insert cycle
+- Scorer toggle - switch all charts between VADER and TextBlob simultaneously
+- Headlines per column - how many top positive/negative headlines to show
+- Min articles per source - hide sources below this count from the filter and charts
+- Neutral boundary ±threshold - live reclassification slider
+- Source multiselect - filter to specific sources
+- Refresh data - clears the 5-minute cache and reloads from the DB
+- Re-run scraper - triggers a full discovery + scrape + insert cycle
 
 **Dashboard sections:**
-- KPI strip — article count, source count, % positive, % negative, scorer agreement rate (updates with threshold)
-- Sentiment distribution — VADER vs TextBlob donut charts side by side
-- Scorer agreement scatter — each dot is one article, diagonal = perfect agreement, shows active threshold
-- Sentiment by source — average compound score per source, both scorers overlaid
-- Top headlines — most extreme articles as clickable links with score badges
-- Word clouds — title words sized by frequency, respects scorer toggle
-- Raw data table — full scored dataset with formatted score columns
+- KPI strip - article count, source count, % positive, % negative, scorer agreement rate (updates with threshold)
+- Sentiment distribution - VADER vs TextBlob donut charts side by side
+- Scorer agreement scatter - each dot is one article, diagonal = perfect agreement, shows active threshold
+- Sentiment by source - average compound score per source, both scorers overlaid
+- Top headlines - most extreme articles as clickable links with score badges
+- Word clouds - title words sized by frequency, respects scorer toggle
+- Raw data table - full scored dataset with formatted score columns
 
 ---
 
@@ -55,18 +55,18 @@ Opens at `http://localhost:8501`. Scrapes fresh articles automatically if the da
 ```
 news-scraper/
 ├── config.py                  # All configuration in one place
-├── main.py                    # Stage 1 — manual pipeline run
-├── scheduler.py               # Stage 2 — daily scheduled runs
+├── main.py                    # Stage 1 - manual pipeline run
+├── scheduler.py               # Stage 2 - daily scheduled runs
 ├── discoverer.py              # RSS + sitemap URL discovery
 ├── scraper.py                 # Three-layer extraction + source normalisation
 ├── database.py                # SQLite, deduplication, source backfill
 ├── sentiment.py               # VADER + TextBlob scoring, idempotent write-back
-├── dashboard.py               # Streamlit dashboard — glassmorphism theme
+├── dashboard.py               # Streamlit dashboard - glassmorphism theme
 ├── punkt_tab_downloader.py    # NLTK punkt_tab auto-downloader
 ├── pyproject.toml             # Auto-generated by uv
 ├── requirements.txt
 ├── dags/
-│   └── news_pipeline_dag.py   # Stage 3 — Airflow DAG (Linux/WSL2)
+│   └── news_pipeline_dag.py   # Stage 3 - Airflow DAG (Linux/WSL2)
 ├── tests/
 │   └── test_pipeline.py       # 24 pytest tests
 └── data/                      # Auto-created on first run
@@ -120,7 +120,7 @@ uv run airflow standalone
 
 ## Configuration
 
-All settings in `config.py` — one file, no hunting across scripts.
+All settings in `config.py`
 
 ```python
 RSS_FEEDS       = ["https://feeds.bbci.co.uk/news/rss.xml", ...]
@@ -199,20 +199,20 @@ uv add --dev pytest
 uv lock
 ```
 
-Anyone cloning runs `uv sync` — one command, reproducible environment.
+Anyone cloning runs `uv sync` - one command, reproducible environment.
 
 ---
 
 ## Roadmap
 
-- [ ] Named entity recognition with spaCy — extract people, orgs, locations from articles
-- [ ] Topic clustering — TF-IDF + K-Means to auto-group articles by theme
-- [ ] PostgreSQL upgrade — swap SQLite connection string, schema stays identical
-- [ ] Playwright fallback — handle JS-rendered sites that all three extractors miss
+- [ ] Named entity recognition with spaCy - extract people, orgs, locations from articles
+- [ ] Topic clustering - TF-IDF + K-Means to auto-group articles by theme
+- [ ] PostgreSQL upgrade - swap SQLite connection string, schema stays identical
+- [ ] Playwright fallback - handle JS-rendered sites that all three extractors miss
 - [ ] Streamlit Cloud deployment
 
 ---
 
 ## License
 
-MIT — free to use and modify.
+MIT - free to use and modify.
