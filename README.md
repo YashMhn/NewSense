@@ -53,7 +53,7 @@ Opens at `http://localhost:8501`. Scrapes fresh articles automatically if the da
 ## Project structure
 
 ```
-news-scraper/
+NewSense/
 ├── config.py                  # All configuration in one place
 ├── main.py                    # Stage 1 - manual pipeline run
 ├── scheduler.py               # Stage 2 - daily scheduled runs
@@ -82,8 +82,8 @@ news-scraper/
 > Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/news-scraper.git
-cd news-scraper
+git clone https://github.com/YashMhn/NewSense.git
+cd NewSense
 uv sync
 ```
 
