@@ -218,6 +218,9 @@ def backfill_sources(db_path: str = DB_PATH) -> int:
 
     conn.close()
     return updated
+
+
+def print_db_stats(db_path: str = DB_PATH) -> None:
     """Prints a formatted database stats summary to the terminal."""
     stats = get_stats(db_path)
 

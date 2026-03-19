@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from discoverer import discover_all
 from scraper import scrape_articles
 from database import init_db, insert_articles
+from punkt_tab_downloader import ensure_punkt
 
 
 # ── DAG default args ──────────────────────────────────────────────────────────
@@ -58,12 +59,6 @@ RSS_FEEDS = [
     "https://feeds.feedburner.com/ndtvnews-top-stories",
 ]
 
-KEYWORDS = [
-    "AI India 2025",
-    "startup funding India",
-    "technology news",
-]
-
 SITEMAP_SITES = [
     "https://www.thehindu.com",
 ]
@@ -76,7 +71,8 @@ MAX_PER_SOURCE = 10
 # XCom (cross-communication) is used to pass data between tasks.
 
 def task_init_db(**context) -> None:
-    """Task 1: Ensure the database and schema exist."""
+    """Task 1: Ensure NLP resources and the database schema exist."""
+    ensure_punkt()
     init_db()
     print("Database initialised successfully.")
 
@@ -88,13 +84,12 @@ def task_discover_urls(**context) -> list[str]:
     """
     urls = discover_all(
         rss_feeds=RSS_FEEDS,
-        keywords=KEYWORDS,
         sitemap_sites=SITEMAP_SITES,
         max_per_source=MAX_PER_SOURCE,
     )
 
     if not urls:
-        raise ValueError("No URLs discovered — check RSS feeds and keywords.")
+        raise ValueError("No URLs discovered — check RSS feeds and sitemaps.")
 
     print(f"Discovered {len(urls)} unique URLs.")
 
