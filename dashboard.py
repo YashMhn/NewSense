@@ -645,8 +645,8 @@ def main() -> None:
     score_col    = "vader_compound" if scorer == "vader" else "tb_compound"
 
     # ── KPI strip ─────────────────────────────────────────────────────────────
-    pos_pct   = round((filtered["vader_label"] == "positive").mean() * 100, 1)
-    neg_pct   = round((filtered["vader_label"] == "negative").mean() * 100, 1)
+    pos_pct   = round((filtered[label_col] == "positive").mean() * 100, 1)
+    neg_pct   = round((filtered[label_col] == "negative").mean() * 100, 1)
     agree     = agreement_rate(filtered)
 
     k1, k2, k3, k4, k5 = st.columns(5)
@@ -710,7 +710,7 @@ def main() -> None:
         filtered,
         x="vader_compound",
         y="tb_compound",
-        color="vader_label",
+        color=label_col,
         color_discrete_map=LABEL_COLORS,
         hover_data={"title": True, "source": True,
                     "vader_compound": ":.3f", "tb_compound": ":.3f"},
@@ -840,7 +840,7 @@ def main() -> None:
                 "title", "source", "date",
                 "vader_compound", "vader_label",
                 "tb_compound", "tb_label", "tb_subjectivity",
-            ]].sort_values("vader_compound"),
+            ]].sort_values(score_col),
             width='stretch',
             hide_index=True,
             column_config={

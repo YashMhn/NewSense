@@ -234,3 +234,56 @@ class TestDatabase:
         count = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
         conn.close()
         assert count == 0
+
+
+# ── regression tests ──────────────────────────────────────────────────────────
+
+import pandas as pd
+from sentiment import agreement_rate
+from database import print_db_stats
+
+
+class TestAgreementRate:
+    def test_full_agreement(self):
+        df = pd.DataFrame({
+            "vader_label": ["positive", "neutral", "negative"],
+            "tb_label":    ["positive", "neutral", "negative"],
+        })
+        assert agreement_rate(df) == 100.0
+
+    def test_partial_agreement(self):
+        df = pd.DataFrame({
+            "vader_label": ["positive", "neutral", "negative"],
+            "tb_label":    ["positive", "negative", "negative"],
+        })
+        assert agreement_rate(df) == pytest.approx(66.7, abs=0.01)
+
+    def test_no_agreement(self):
+        df = pd.DataFrame({
+            "vader_label": ["positive", "positive"],
+            "tb_label":    ["negative", "negative"],
+        })
+        assert agreement_rate(df) == 0.0
+
+    def test_empty_dataframe(self):
+        df = pd.DataFrame({"vader_label": [], "tb_label": []})
+        assert agreement_rate(df) == 0.0
+
+
+class TestPrintDbStats:
+    def test_no_crash_on_empty_db(self, tmp_db):
+        # Must not raise any exception on an empty database
+        print_db_stats(tmp_db)
+
+    def test_no_crash_with_articles(self, tmp_db):
+        insert_articles([SAMPLE_ARTICLE], db_path=tmp_db)
+        print_db_stats(tmp_db)
+
+
+class TestDagDiscoverCall:
+    def test_discover_all_call_has_no_keywords(self):
+        from pathlib import Path
+        dag_path = Path(__file__).parent.parent / "dags" / "news_pipeline_dag.py"
+        with open(dag_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "keywords=" not in content

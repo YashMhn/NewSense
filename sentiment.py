@@ -42,6 +42,27 @@ STOPWORDS = {
 }
 
 
+# ── TextBlob bootstrap ────────────────────────────────────────────────────────
+
+def ensure_textblob_corpora() -> None:
+    """
+    Ensures TextBlob corpora are available on fresh environments.
+    Safe to call repeatedly — no-op if corpora already present.
+    """
+    try:
+        _ = TextBlob("health check").sentiment
+    except Exception:
+        try:
+            print("Downloading TextBlob corpora...")
+            from textblob import download_corpora
+            download_corpora.download_all()
+            _ = TextBlob("health check").sentiment
+        except Exception as e:
+            raise RuntimeError(
+                "TextBlob corpora missing. Run: python -m textblob.download_corpora"
+            ) from e
+
+
 # ── Label helper ──────────────────────────────────────────────────────────────
 
 def _label(score: float) -> str:
@@ -129,6 +150,7 @@ def score_database(db_path: str = DB_PATH) -> int:
     Returns:
         Number of articles scored in this call.
     """
+    ensure_textblob_corpora()
     conn = get_connection(db_path)
     _ensure_sentiment_columns(conn)
 
