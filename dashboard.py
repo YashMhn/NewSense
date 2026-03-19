@@ -40,7 +40,7 @@ from sentiment import (
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="NewSense · Sentiment Dashboard",
+    page_title="Newsense · Sentiment Dashboard",
     page_icon="🔮",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -550,7 +550,7 @@ def main() -> None:
 
     # ── Header ────────────────────────────────────────────────────────────────
     st.markdown("""
-        <div class="dash-title">🔮 NewSense</div>
+        <div class="dash-title">🔮 Newsense</div>
         <div class="dash-subtitle">Sentiment intelligence across your scraped news — VADER vs TextBlob</div>
     """, unsafe_allow_html=True)
 
@@ -567,14 +567,29 @@ def main() -> None:
             ["vader", "textblob"],
             format_func=lambda x: "VADER" if x == "vader" else "TextBlob",
         )
-        n_headlines = st.slider("Headlines to show", 5, 20, 10)
+        n_headlines = st.slider("Headlines per column", 5, 20, 10)
 
         st.markdown('<hr class="glass-divider">', unsafe_allow_html=True)
         st.markdown(
             f'<div style="font-family:\'Space Grotesk\',sans-serif;font-size:0.9rem;'
-            f'font-weight:600;color:{TEXT_PRIMARY};margin-bottom:0.8rem">Sources</div>',
+            f'font-weight:600;color:{TEXT_PRIMARY};margin-bottom:0.8rem">Filters</div>',
             unsafe_allow_html=True,
         )
+
+        min_articles = st.slider(
+            "Min articles per source", 1, 20, 1,
+            help="Hide sources with fewer articles than this threshold",
+        )
+
+        neutral_threshold = st.slider(
+            "Neutral boundary (±)",
+            min_value=0.00, max_value=0.30, value=0.05, step=0.01,
+            help=(
+                "Scores between −threshold and +threshold are labelled Neutral. "
+                "Raise it to widen the neutral band; lower it to see more positives/negatives."
+            ),
+        )
+
         source_placeholder = st.empty()
 
         st.markdown('<hr class="glass-divider">', unsafe_allow_html=True)
@@ -597,7 +612,12 @@ def main() -> None:
         st.warning("No data available. Check your connection and try refreshing.")
         st.stop()
 
-    sources = sorted([s for s in df["source"].unique() if s != "N/A"])
+    # Build source list — only show sources with enough articles
+    source_counts = df["source"].value_counts()
+    sources = sorted([
+        s for s in source_counts.index
+        if s != "N/A" and source_counts[s] >= min_articles
+    ])
     selected = source_placeholder.multiselect("Filter sources", sources, default=sources,
                                                placeholder="All sources",
                                                label_visibility="collapsed")
@@ -607,6 +627,19 @@ def main() -> None:
         st.warning("No articles match selected sources.")
         st.stop()
 
+    # Re-apply sentiment labels using the custom neutral threshold
+    # This makes all charts, KPIs, and word clouds respond to the slider
+    def relabel(score: float) -> str:
+        if score > neutral_threshold:
+            return "positive"
+        elif score < -neutral_threshold:
+            return "negative"
+        return "neutral"
+
+    filtered = filtered.copy()
+    filtered["vader_label"] = filtered["vader_compound"].apply(relabel)
+    filtered["tb_label"]    = filtered["tb_compound"].apply(relabel)
+
     scorer_label = "VADER" if scorer == "vader" else "TextBlob"
     label_col    = "vader_label" if scorer == "vader" else "tb_label"
     score_col    = "vader_compound" if scorer == "vader" else "tb_compound"
@@ -615,15 +648,14 @@ def main() -> None:
     pos_pct   = round((filtered["vader_label"] == "positive").mean() * 100, 1)
     neg_pct   = round((filtered["vader_label"] == "negative").mean() * 100, 1)
     agree     = agreement_rate(filtered)
-    avg_score = round(filtered[score_col].mean(), 3)
 
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Articles",          f"{len(filtered):,}")
     k2.metric("Sources",           filtered["source"].nunique())
-    k3.metric("Positive (VADER)",  f"{pos_pct}%")
-    k4.metric("Negative (VADER)",  f"{neg_pct}%")
+    k3.metric("Positive",          f"{pos_pct}%")
+    k4.metric("Negative",          f"{neg_pct}%")
     k5.metric("Scorer agreement",  f"{agree}%",
-              help="% where VADER and TextBlob assign the same label")
+              help=f"% where VADER and TextBlob assign the same label (threshold ±{neutral_threshold:.2f})")
 
     st.markdown('<hr class="glass-divider">', unsafe_allow_html=True)
 
@@ -670,7 +702,7 @@ def main() -> None:
     # ── Scatter agreement ─────────────────────────────────────────────────────
     st.markdown(
         '<div class="section-header">◈ Scorer agreement</div>'
-        '<div class="section-caption">Each dot is one article — points near the diagonal mean both scorers agree</div>',
+        f'<div class="section-caption">Each dot is one article — diagonal = both scorers agree · neutral boundary ±{neutral_threshold:.2f}</div>',
         unsafe_allow_html=True,
     )
 
