@@ -1,6 +1,6 @@
 # NewSense
 
-A Python news scraper pipeline with a dark glassmorphism sentiment dashboard. Discovers articles from RSS feeds and sitemaps, extracts content through a three-layer fallback chain, and lets you explore sentiment interactively - including a live neutral boundary slider that reclassifies every chart in real time.
+A Python news scraper pipeline with a sentiment dashboard. Discovers articles from RSS feeds and sitemaps, extracts content through a three-layer fallback chain, and lets you explore sentiment interactively - including a live neutral boundary slider that reclassifies every chart in real time.
 
 ---
 
