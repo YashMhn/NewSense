@@ -203,16 +203,6 @@ Anyone cloning runs `uv sync` - one command, reproducible environment.
 
 ---
 
-## Roadmap
-
-- [ ] Named entity recognition with spaCy - extract people, orgs, locations from articles
-- [ ] Topic clustering - TF-IDF + K-Means to auto-group articles by theme
-- [ ] PostgreSQL upgrade - swap SQLite connection string, schema stays identical
-- [ ] Playwright fallback - handle JS-rendered sites that all three extractors miss
-- [ ] Streamlit Cloud deployment
-
----
-
 ## License
 
 MIT - free to use and modify.
