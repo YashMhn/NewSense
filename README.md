@@ -199,8 +199,6 @@ uv add --dev pytest
 uv lock
 ```
 
-Anyone cloning runs `uv sync` - one command, reproducible environment.
-
 ---
 
 ## License
