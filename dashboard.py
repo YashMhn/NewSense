@@ -16,8 +16,10 @@ Run with:
     uv run streamlit run dashboard.py
 """
 
+import html
 import os
 import sqlite3
+from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -414,14 +416,15 @@ def _scrape_fresh() -> bool:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def _load_cached_data() -> tuple[pd.DataFrame, int]:
+def _load_cached_data() -> pd.DataFrame:
     """
-    Pure data function — no Streamlit calls allowed inside here.
-    Backfills missing sources, scores unscored articles, returns DataFrame.
+    Cached read of the scored dataset. No Streamlit calls allowed in here.
+
+    The database writes (source backfill, scoring) deliberately live in
+    get_data() instead: a cached function only runs on a cache miss, so
+    driving writes from here ties them to cache expiry rather than to data.
     """
-    backfill_sources()
-    newly = score_database()
-    return load_articles(), newly
+    return load_articles()
 
 
 def get_data() -> pd.DataFrame:
@@ -433,10 +436,15 @@ def get_data() -> pd.DataFrame:
     db_empty   = False
 
     if not db_missing:
-        conn  = sqlite3.connect(DB_PATH)
-        count = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
-        conn.close()
-        db_empty = count == 0
+        try:
+            conn  = sqlite3.connect(DB_PATH)
+            count = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+            conn.close()
+            db_empty = count == 0
+        except sqlite3.Error:
+            # File exists but has no articles table yet — treat as empty so the
+            # scrape path below runs init_db() and rebuilds the schema.
+            db_empty = True
 
     if db_missing or db_empty:
         st.info("No articles in database — running scraper now...")
@@ -446,13 +454,32 @@ def get_data() -> pd.DataFrame:
         # Clear cache so the freshly scraped data is picked up
         _load_cached_data.clear()
 
-    df, newly_scored = _load_cached_data()
+    # Writes happen here, uncached; the cache only wraps the read below.
+    backfill_sources()
+    newly_scored = score_database()
+    if newly_scored:
+        _load_cached_data.clear()
+
+    df = _load_cached_data()
     if newly_scored:
         st.toast(f"Scored {newly_scored} new articles.", icon="✅")
     return df
 
 
 # ── Render helpers ────────────────────────────────────────────────────────────
+
+def safe_url(url: str) -> str:
+    """
+    Returns an escaped URL, or '#' if it is not a plain http(s) link.
+    Blocks javascript:/data: URLs arriving from scraped pages.
+    """
+    try:
+        if urlparse(str(url)).scheme.lower() in ("http", "https"):
+            return html.escape(str(url), quote=True)
+    except Exception:
+        pass
+    return "#"
+
 
 def score_pill_html(score: float) -> str:
     if score > 0.05:
@@ -476,11 +503,18 @@ def render_headlines(headlines: pd.DataFrame) -> None:
         return
     for _, row in headlines.iterrows():
         pill = score_pill_html(row["score"])
+        # Titles, sources and URLs come from scraped third-party pages, so they
+        # are untrusted input being rendered with unsafe_allow_html. Escape the
+        # text and allow only http(s) links — otherwise a crafted headline can
+        # inject markup or a javascript: URL into the dashboard.
+        title  = html.escape(str(row["title"]))
+        source = html.escape(str(row["source"]))
+        url    = safe_url(row["url"])
         st.markdown(f"""
         <div class="headline-card">
-            <a href="{row['url']}" target="_blank" class="headline-title">{row['title']}</a>
+            <a href="{url}" target="_blank" rel="noopener noreferrer" class="headline-title">{title}</a>
             <div class="headline-meta">
-                <span>{row['source']}</span>
+                <span>{source}</span>
                 <span>·</span>
                 {pill}
             </div>

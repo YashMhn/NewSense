@@ -1,12 +1,11 @@
 """
 discoverer.py
 -------------
-Discovers article URLs from three sources:
-  1. RSS Feeds     — latest articles from any news site
-  2. Google News   — search articles by keyword
-  3. Sitemap       — crawl a site's sitemap.xml for article URLs
+Discovers article URLs from two sources:
+  1. RSS Feeds — latest articles from any news site
+  2. Sitemap   — crawl a site's sitemap.xml for article URLs
 
-All three return a flat list of URLs, ready to pass into scraper.py.
+Both return a flat list of URLs, ready to pass into scraper.py.
 """
 
 import feedparser
@@ -25,7 +24,7 @@ def _is_article_url(url: str) -> bool:
     """
     skip_patterns = [
         "/tag/", "/tags/", "/category/", "/author/",
-        "/page/", "/feed/", "/search/", "/?", "/about",
+        "/page/", "/feed/", "/search/", "/about",
         "/contact", "/privacy", "/terms"
     ]
     parsed = urlparse(url)

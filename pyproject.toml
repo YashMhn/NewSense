@@ -1,7 +1,7 @@
 [project]
-name = "sentiment"
+name = "newsense"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python news scraper pipeline with a sentiment dashboard."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -22,3 +22,12 @@ dependencies = [
     "vadersentiment>=3.3.2",
     "wordcloud>=1.9.6",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

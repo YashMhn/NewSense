@@ -6,6 +6,8 @@ Edit this file to change sources, schedule, or behaviour.
 Imported by main.py, scheduler.py, and the Airflow DAG.
 """
 
+import os
+
 # ── Discovery ─────────────────────────────────────────────────────────────────
 
 # RSS feed URLs — add or remove any RSS/Atom feed
@@ -42,8 +44,11 @@ MIN_TEXT_LENGTH = 100
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 
-# Directory for all output files (DB, CSV, logs)
-DATA_DIR = "data"
+# Directory for all output files (DB, CSV, logs).
+# Anchored to the project root so every entry point writes to the same place
+# regardless of the working directory it was launched from — Airflow in
+# particular runs tasks from its own cwd.
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 # SQLite database filename
 DB_FILENAME = "news.db"

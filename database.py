@@ -18,9 +18,11 @@ import sqlite3
 import os
 from datetime import datetime
 
+from config import DATA_DIR, DB_FILENAME
 
-# Default database file path
-DB_PATH = os.path.join("data", "news.db")
+
+# Default database file path — absolute, so it does not depend on the cwd
+DB_PATH = os.path.join(DATA_DIR, DB_FILENAME)
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -59,7 +61,9 @@ def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     Returns a SQLite connection with Row factory enabled
     (so rows can be accessed like dicts).
     """
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    parent = os.path.dirname(db_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn

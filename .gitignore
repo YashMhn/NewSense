@@ -23,8 +23,8 @@ venv/
 env/
 ENV/
 
-# uv
-uv.lock
+# uv — uv.lock IS committed on purpose: it is what makes `uv sync`
+# reproducible for anyone cloning the repo.
 
 # Project data outputs — don't commit scraped data or logs
 data/

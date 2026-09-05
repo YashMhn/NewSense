@@ -51,6 +51,29 @@ def _make_goose() -> Goose:
 
 _log_lock = Lock()
 
+# ── Request throttle ──────────────────────────────────────────────────────────
+
+_rate_lock = Lock()
+_last_request_at = 0.0
+
+
+def _throttle() -> None:
+    """
+    Spaces outbound requests REQUEST_DELAY / MAX_WORKERS apart across every
+    worker thread. Staggering submissions alone only delays the first request
+    of each worker — after that the pool runs unthrottled, which is what
+    actually trips rate limiting.
+    """
+    global _last_request_at
+    if REQUEST_DELAY <= 0:
+        return
+    gap = REQUEST_DELAY / max(MAX_WORKERS, 1)
+    with _rate_lock:
+        wait = _last_request_at + gap - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_at = time.monotonic()
+
 
 # ── Source normalisation ──────────────────────────────────────────────────────
 
@@ -127,7 +150,7 @@ def _with_retry(fn, url: str, label: str) -> dict | None:
         if result:
             return result
         if attempt < MAX_RETRIES:
-            print(f"   ↩  {label}: retry {attempt}/{MAX_RETRIES - 1}...")
+            print(f"   ↩  {label}: retry {attempt}/{MAX_RETRIES}...")
             time.sleep(RETRY_DELAY)
     return None
 
@@ -137,6 +160,7 @@ def _with_retry(fn, url: str, label: str) -> dict | None:
 def _scrape_with_trafilatura(url: str) -> dict | None:
     """Primary extraction using Trafilatura."""
     try:
+        _throttle()
         downloaded = trafilatura.fetch_url(url)
         if not downloaded:
             print(f"   ⚠️  Trafilatura: fetch returned nothing (rate limited or blocked)")
@@ -185,6 +209,7 @@ def _scrape_with_trafilatura(url: str) -> dict | None:
 def _scrape_with_newspaper(url: str) -> dict | None:
     """Fallback extraction using Newspaper4k. Adds NLP keywords + summary."""
     try:
+        _throttle()
         article = NewspaperArticle(url, request_timeout=10)
         article.download()
         article.parse()
@@ -222,7 +247,9 @@ def _scrape_with_goose(url: str) -> dict | None:
     Effective on Indian/Asian news sites (TOI, The Hindu, NDTV).
     Creates a fresh Goose instance per call -- Goose3 is not thread-safe.
     """
+    goose = None
     try:
+        _throttle()
         goose = _make_goose()
         article = goose.extract(url=url)
 
@@ -261,6 +288,14 @@ def _scrape_with_goose(url: str) -> dict | None:
     except Exception as e:
         print(f"   ⚠️  Goose3 error: {e}")
         return None
+
+    finally:
+        # Goose3 keeps an open requests session per instance
+        if goose is not None:
+            try:
+                goose.close()
+            except Exception:
+                pass
 
 
 # ── Single article pipeline ───────────────────────────────────────────────────
@@ -320,9 +355,6 @@ def scrape_articles(urls: list[str]) -> tuple[list[dict], int]:
         for i, url in enumerate(urls):
             future = executor.submit(scrape_article, url)
             future_to_url[future] = (i + 1, url)
-            # Stagger submissions to avoid bursting all workers at once
-            if i < total - 1:
-                time.sleep(REQUEST_DELAY / MAX_WORKERS)
 
         for future in as_completed(future_to_url):
             idx, url = future_to_url[future]

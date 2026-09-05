@@ -22,7 +22,6 @@ import pandas as pd
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-from config import DATA_DIR, DB_FILENAME
 from database import DB_PATH, get_connection
 
 # Initialised once at module level — cheap after first import
@@ -138,8 +137,12 @@ def _ensure_sentiment_columns(conn: sqlite3.Connection) -> None:
     for col in columns:
         try:
             conn.execute(f"ALTER TABLE articles ADD COLUMN {col}")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+        except sqlite3.OperationalError as e:
+            # Only "duplicate column name" is expected here. Anything else
+            # (locked database, missing table) is a real fault and must surface
+            # rather than be silently swallowed.
+            if "duplicate column" not in str(e).lower():
+                raise
 
 
 def score_database(db_path: str = DB_PATH) -> int:

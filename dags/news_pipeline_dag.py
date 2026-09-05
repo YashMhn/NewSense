@@ -24,6 +24,7 @@ Setup:
 
 from __future__ import annotations
 
+import json
 import sys
 import os
 
@@ -37,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from discoverer import discover_all
 from scraper import scrape_articles
 from database import init_db, insert_articles
+from config import DATA_DIR
 from punkt_tab_downloader import ensure_punkt
 
 
@@ -68,7 +70,8 @@ MAX_PER_SOURCE = 10
 
 # ── Task functions ────────────────────────────────────────────────────────────
 # Each function below becomes one task in the Airflow UI.
-# XCom (cross-communication) is used to pass data between tasks.
+# XCom (cross-communication) passes small values between tasks —
+# bulk article data goes through a batch file on disk instead.
 
 def task_init_db(**context) -> None:
     """Task 1: Ensure NLP resources and the database schema exist."""
@@ -77,7 +80,7 @@ def task_init_db(**context) -> None:
     print("Database initialised successfully.")
 
 
-def task_discover_urls(**context) -> list[str]:
+def task_discover_urls(**context) -> None:
     """
     Task 2: Discover article URLs from all sources.
     Pushes the URL list to XCom for the next task to pick up.
@@ -95,13 +98,13 @@ def task_discover_urls(**context) -> list[str]:
 
     # Push to XCom so next task can access it
     context["ti"].xcom_push(key="urls", value=urls)
-    return urls
 
 
 def task_scrape_articles(**context) -> None:
     """
     Task 3: Scrape articles from discovered URLs using fallback chain.
-    Pulls URL list from XCom, pushes scraped articles back to XCom.
+    Pulls URL list from XCom, writes articles to a batch file,
+    and pushes only that file's path back to XCom.
     """
     # Pull URLs from previous task
     urls = context["ti"].xcom_pull(task_ids="discover_urls", key="urls")
@@ -116,20 +119,37 @@ def task_scrape_articles(**context) -> None:
 
     print(f"Scraped {len(articles)} articles. Failed: {failed_count}.")
 
-    # Push articles to XCom for the save task
-    context["ti"].xcom_push(key="articles", value=articles)
+    # Articles carry full body text — far too large for XCom, which stores
+    # every value in the Airflow metadata database. Write them to disk and
+    # pass only the file path through XCom.
+    os.makedirs(DATA_DIR, exist_ok=True)
+    batch_path = os.path.join(
+        DATA_DIR, f"batch_{context['ts_nodash']}.json"
+    )
+    with open(batch_path, "w", encoding="utf-8") as f:
+        json.dump(articles, f, ensure_ascii=False)
+
+    context["ti"].xcom_push(key="batch_path", value=batch_path)
     context["ti"].xcom_push(key="failed_count", value=failed_count)
 
 
 def task_save_to_db(**context) -> None:
     """
     Task 4: Save scraped articles to SQLite with deduplication.
-    Pulls articles from XCom and inserts into the database.
+    Reads the batch file written by the scrape task and inserts it.
     """
-    articles = context["ti"].xcom_pull(task_ids="scrape_articles", key="articles")
+    batch_path = context["ti"].xcom_pull(
+        task_ids="scrape_articles", key="batch_path"
+    )
+
+    if not batch_path or not os.path.exists(batch_path):
+        raise ValueError("No article batch file received from scrape_articles task.")
+
+    with open(batch_path, "r", encoding="utf-8") as f:
+        articles = json.load(f)
 
     if not articles:
-        raise ValueError("No articles received from scrape_articles task.")
+        raise ValueError("Article batch file is empty.")
 
     inserted, duplicates = insert_articles(articles)
 
@@ -153,7 +173,7 @@ with DAG(
     dag_id="news_scraper_pipeline",
     description="Daily news scraper: discover → scrape → store in SQLite",
     default_args=default_args,
-    schedule_interval="0 8 * * *",   # Every day at 08:00 (cron syntax)
+    schedule="0 8 * * *",            # Every day at 08:00 (cron syntax)
     start_date=datetime(2025, 1, 1),
     catchup=False,                    # Don't backfill missed runs
     tags=["news", "scraper", "data-engineering"],

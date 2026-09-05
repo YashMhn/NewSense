@@ -14,6 +14,7 @@ All configuration lives in config.py.
 
 import csv
 import os
+import sys
 from collections import Counter
 from datetime import datetime
 
@@ -103,7 +104,7 @@ if __name__ == "__main__":
 
     if not urls:
         print("\nNo URLs discovered. Check config.py sources.")
-        exit(1)
+        sys.exit(1)
 
     # Step 2: Scrape articles
     print(f"\n[STEP 2] SCRAPING {len(urls)} ARTICLES")
@@ -111,7 +112,7 @@ if __name__ == "__main__":
 
     if not articles:
         print("No articles scraped. Check your connection and try again.")
-        exit(1)
+        sys.exit(1)
 
     # Step 3: Save to database
     print(f"\n[STEP 3] SAVING TO DATABASE")

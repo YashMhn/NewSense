@@ -78,7 +78,7 @@ def run_pipeline() -> None:
             print(f"    {'█' * count} {extractor} ({count})")
 
         # Step 4: Summary
-        elapsed = (datetime.now() - run_start).seconds
+        elapsed = (datetime.now() - run_start).total_seconds()
         print(f"\n{'='*65}")
         print(f"  RUN SUMMARY")
         print(f"{'='*65}")
@@ -88,7 +88,7 @@ def run_pipeline() -> None:
         print(f"  Duplicates      : {duplicates}")
         print(f"  Failed URLs     : {failed_count}"
               + (f" -> see {DATA_DIR}/failed_urls.log" if failed_count else ""))
-        print(f"  Time taken      : {elapsed}s")
+        print(f"  Time taken      : {elapsed:.1f}s")
 
         print_db_stats()
 
